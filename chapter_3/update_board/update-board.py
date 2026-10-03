@@ -1,63 +1,133 @@
 import sys
+import math
 
 # Please do not remove package declarations because these are used by the autograder. If you need additional packages, then you may declare them above.
+# Cell contains two attributes corresponding to
+# the concentration of predator (0-th element) and prey (1-th element) in the cell
+Cell = tuple[float, float]
 
-# GameBoard is a two-dimensional list of boolean variables
-# representing a single generation of a Game of Life board.
-GameBoard = list[list[bool]]  
+# Board is a two-dimensional slice of Cells
+Board = list[list[Cell]]
 
-# write your update_board() function here along with any subroutines that you need.
-def update_board(current_board: GameBoard) -> GameBoard:
+# Insert your update_board() function here, along with any subroutines that you need.
+def update_board(
+    currentBoard: Board,
+    feedRate: float,
+    killRate: float,
+    preyDiffusionRate: float,
+    predatorDiffusionRate: float,
+    kernel: list[list[float]]
+) -> Board:
     """
-    update_board takes as input a GameBoard and returns the board resulting
-    from playing the Game of Life for one generation.
+    Update a Gray-Scott reaction-diffusion board by one time step.
+
     Args:
-        current_board (GameBoard): The current game board.
+        current_board: A 2D list of Cells, where each Cell is a list of two floats.
+        feed_rate: Feed reaction rate.
+        kill_rate: Kill reaction rate.
+        prey_diffusion_rate: Diffusion rate for the prey component.
+        predator_diffusion_rate: Diffusion rate for the predator component.
+        kernel: A 3x3 diffusion kernel.
     Returns:
-        GameBoard: A new board representing the next generation.
+        A new Board representing the next time step after applying the
+        Gray-Scott reaction-diffusion update rules.
     """
-    num_rows=count_rows(current_board)
-    num_cols=count_cols(current_board)
 
-    new_board=initialize_board(num_rows,num_cols)
+    numRows = count_rows(currentBoard)
+    numCols = count_rows(currentBoard)
+    newBoard = initialize_board(numRows, numCols)
+    for row in range(numRows):
+        for col in range(numCols):
+            newBoard[row][col] = UpdateCell(currentBoard, row, col, feedRate, killRate, preyDiffusionRate, predatorDiffusionRate, kernel)
+    return newBoard
 
-    for p in range(num_rows):
-        for i in range(num_cols):
-            new_board[p][i]=update_cell(current_board, p, i)
-    return new_board
-
-def update_cell(board: GameBoard, r: int, c: int):
-    if not isinstance(board,list) or len(board)==0:
-        raise ValueError("board must be a non-empty GameBoard")
-    if not isinstance(r,int) or not isinstance(c,int):
-        raise ValueError("r and c must be integers")
-
-    num_neighbors=count_live_neighbors(board,r,c)
-
-    #if alive
-    if board[r][c]:
-        if num_neighbors==2 or num_neighbors==3:
-            return True
-        else:
-            return False
-
-    else: #dead
-        if num_neighbors==3:
-            return True
-        else:
-            return False
+def UpdateCell(currentBoard, row, col, feedRate, killRate, preyDiffusionRate, predatorDiffusionRate, kernel):
+    currentCell = currentBoard[row][col]
+    diffusionValues = change_due_to_diffusion(currentBoard, row, col, preyDiffusionRate, predatorDiffusionRate, kernel)
+    reactionValues = change_due_to_reactions(currentCell, feedRate, killRate)
+    return sum_cells(currentCell, diffusionValues, reactionValues)
 
 
-def count_live_neighbors(board: GameBoard, r, c):
-    num_live_neighbors=0
+def sum_cells(*cells: Cell) -> list[float]:
+    """
+    Sum corresponding elements of multiple cells.
 
-    for i in range(r-1,r+2):
-        for j in range(c-1,c+2):
-            if ((i!=r) or (j!=c)) and in_field(board,i,j):
-                if board[i][j]:
-                    num_live_neighbors+=1
+    Args:
+        *cells: An arbitrary number of Cell values, where each Cell is
+            a tuple of two floats.
+    Returns:
+        A single Cell representing the element-wise sum of all input cells.
+    """
+    first_lst=[]
+    second_lst=[]
 
-    return num_live_neighbors
+    for (x,y) in cells:
+        first_lst.append(x)
+        second_lst.append(y)
+
+
+    return (sum_lst(first_lst),sum_lst(second_lst))
+
+def sum_lst(lst) -> int:
+    summ=0
+    for val in lst:
+        summ += val
+    return summ
+
+def change_due_to_reactions(
+    current_cell: Cell,
+    feed_rate: float,
+    kill_rate: float
+) -> Cell:
+    """
+    Compute the change in a cell due to Gray-Scott reactions.
+
+    Args:
+        current_cell: The current cell.
+        feed_rate: The feed reaction rate.
+        kill_rate: The kill reaction rate.
+    Returns:
+        A Cell representing the change in current_cell due to reactions.
+    """
+    #[A]new =   f(1-[A]) - r · [A] · [B]2
+    #[B]new =  - k · [B] + r · [A] · [B]2 .
+
+    new_A=(feed_rate*(1-current_cell[0]))-(current_cell[0]*(current_cell[1]**2))
+    new_B=(-kill_rate*current_cell[1])+(current_cell[0]*(current_cell[1]**2))
+    return (new_A,new_B)
+
+def change_due_to_diffusion(
+    current_board: Board,
+    row: int,
+    col: int,
+    prey_diffusion_rate: float,
+    predator_diffusion_rate: float,
+    kernel: list[list[float]]
+) -> Cell:
+    """
+    Compute the change in a cell due to diffusion.
+
+    Args:
+        current_board: A 2D list of Cells, where each Cell is a tuple of two floats.
+        row: Row index of the cell.
+        col: Column index of the cell.
+        prey_diffusion_rate: Diffusion rate for the prey component.
+        predator_diffusion_rate: Diffusion rate for the predator component.
+        kernel: A 3x3 diffusion kernel.
+    Returns:
+        A Cell representing the change in the cell at (row, col) due to diffusion.
+    """
+
+    prey_sum=0
+    pred_sum=0
+    p=row
+    i=col
+    for k in range(-1,2):
+        for l in range(-1,2):
+            if (in_field(current_board,p+k,i+l)):
+                prey_sum+=current_board[p+k][i+l][0]*kernel[1+k][1+l]*prey_diffusion_rate
+                pred_sum+=current_board[p+k][i+l][1]*kernel[1+k][1+l]*predator_diffusion_rate
+    return (prey_sum,pred_sum)
 
 def in_field(board,i,j):
     #check if not in field-> return false
@@ -69,37 +139,7 @@ def in_field(board,i,j):
 
     return True
 
-def initialize_board(num_rows: int, num_cols: int) -> list[list[bool]]:
-    """
-    Initialize a board with all cells set to False.
-
-    Args:
-        num_rows: Number of rows in the board.
-        num_cols: Number of columns in the board.
-    Returns:
-        A 2D list representing the board, initialized to False.
-    """
-    b = [[False] * num_cols for _ in range(num_rows)]
-    return b
-
-def assert_rectangular(board: GameBoard) -> None:
-    """
-    Check whether a GameBoard is rectangular.
-    Args:
-        board (GameBoard): The game board.
-    Raises:
-        ValueError: If the board has no rows or if its rows are not the same length.
-    """
-    if len(board) == 0:
-        raise ValueError("Error: no rows in GameBoard.")
-    first_row_length = len(board[0])
-
-    # range over rows and make sure that they have the same length as first row
-    for row in board:
-        if len(row) != first_row_length:
-            raise ValueError("Error: GameBoard is not rectangular.")
-
-def count_rows(board: list[list[bool]]) -> int:
+def count_rows(board: GameBoard) -> int:
     """
     Count the number of rows in a game board.
 
@@ -111,7 +151,7 @@ def count_rows(board: list[list[bool]]) -> int:
     return len(board)
 
 
-def count_cols(board: list[list[bool]]) -> int:
+def count_cols(board: GameBoard) -> int:
     """
     Count the number of columns in a game board.
 
@@ -125,3 +165,12 @@ def count_cols(board: list[list[bool]]) -> int:
         raise Exception("Error: empty board given to count_cols")
     # give # of elements in 0-th row
     return len(board[0])
+
+def initialize_board(num_rows, num_cols):
+    board: GameBoard=[]
+
+    for _ in range(num_rows):
+         current_row=[0.0]*num_cols
+         board.append(current_row)
+    return board
+    
