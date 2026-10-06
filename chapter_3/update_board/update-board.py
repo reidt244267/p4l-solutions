@@ -1,145 +1,113 @@
 import sys
-import math
 
 # Please do not remove package declarations because these are used by the autograder. If you need additional packages, then you may declare them above.
-# Cell contains two attributes corresponding to
-# the concentration of predator (0-th element) and prey (1-th element) in the cell
-Cell = tuple[float, float]
 
-# Board is a two-dimensional slice of Cells
-Board = list[list[Cell]]
+# GameBoard is a two-dimensional list of strings, one per cell state,
+# representing a single generation of a Game of Life board.
+GameBoard = list[list[str]]  
 
-# Insert your update_board() function here, along with any subroutines that you need.
-def update_board(
-    currentBoard: Board,
-    feedRate: float,
-    killRate: float,
-    preyDiffusionRate: float,
-    predatorDiffusionRate: float,
-    kernel: list[list[float]]
-) -> Board:
+# write your update_board() function here along with any subroutines that you need.
+def update_board(current_board: GameBoard, neighborhood_type: str, rules: dict[str, str]) ->           GameBoard:
     """
-    Update a Gray-Scott reaction-diffusion board by one time step.
+    Update a GameBoard for one generation according to the given rules and neighborhood type.
+    Args:
+        current_board (GameBoard): The current state of the automaton.
+        neighborhood_type (str): Either "Moore" or "vonNeumann".
+        rules (dict[str, str]): A mapping from neighborhood strings to next-state strings.
+    Returns:
+        GameBoard: The new board after applying the automaton rules for one generation.
+    """
+
+    num_rows=count_rows(current_board)
+    num_cols=count_columns(current_board)
+
+    new_board=initialize_board(num_rows,num_cols)
+
+    for p in range(num_rows):
+        for i in range(num_cols):
+            new_board[p][i]=update_cell(current_board, p,i, neighborhood_type,rules)
+
+    return new_board
+
+def initialize_board(num_rows: int, num_cols: int) -> list[list[str]]:
+    """
+    Initialize a board with all cells set to 0.
 
     Args:
-        current_board: A 2D list of Cells, where each Cell is a list of two floats.
-        feed_rate: Feed reaction rate.
-        kill_rate: Kill reaction rate.
-        prey_diffusion_rate: Diffusion rate for the prey component.
-        predator_diffusion_rate: Diffusion rate for the predator component.
-        kernel: A 3x3 diffusion kernel.
+        num_rows: Number of rows in the board.
+        num_cols: Number of columns in the board.
     Returns:
-        A new Board representing the next time step after applying the
-        Gray-Scott reaction-diffusion update rules.
+        A 2D list representing the board, initialized to 0.
     """
+    # make a 2-D list (default values = 0)
+    board = []
+    # now we need to make the rows too
+    for r in range(num_rows):
+        board.append(["0"] * num_cols)
 
-    numRows = count_rows(currentBoard)
-    numCols = count_rows(currentBoard)
-    newBoard = initialize_board(numRows, numCols)
-    for row in range(numRows):
-        for col in range(numCols):
-            newBoard[row][col] = UpdateCell(currentBoard, row, col, feedRate, killRate, preyDiffusionRate, predatorDiffusionRate, kernel)
-    return newBoard
-
-def UpdateCell(currentBoard, row, col, feedRate, killRate, preyDiffusionRate, predatorDiffusionRate, kernel):
-    currentCell = currentBoard[row][col]
-    diffusionValues = change_due_to_diffusion(currentBoard, row, col, preyDiffusionRate, predatorDiffusionRate, kernel)
-    reactionValues = change_due_to_reactions(currentCell, feedRate, killRate)
-    return sum_cells(currentCell, diffusionValues, reactionValues)
+    return board
 
 
-def sum_cells(*cells: Cell) -> list[float]:
+def update_cell(board: GameBoard, r: int, c: int,
+                neighborhood_type: str,
+                rules: dict[str, str]) -> str:
     """
-    Sum corresponding elements of multiple cells.
-
+    Determine next-state string for cell (r, c) using rules and neighborhood type.
     Args:
-        *cells: An arbitrary number of Cell values, where each Cell is
-            a tuple of two floats.
+        board (GameBoard): Current state of the automaton.
+        r (int): Row index of the cell to update.
+        c (int): Column index of the cell to update.
+        neighborhood_type (str): Either "Moore" or "vonNeumann".
+        rules (dict[str, str]): A mapping from neighborhood strings to next-state strings.
     Returns:
-        A single Cell representing the element-wise sum of all input cells.
+        int: next state for the cell.
     """
-    first_lst=[]
-    second_lst=[]
+    if not isinstance(board,list) or len(board)==0:
+        raise ValueError("board must be a non-empty GameBoard")
+    if not isinstance(r,int) or not isinstance(c,int):
+        raise ValueError("r and c must be integers")
 
-    for (x,y) in cells:
-        first_lst.append(x)
-        second_lst.append(y)
+    nbrhood=neighborhood_to_string(board,r,c,neighborhood_type)
+
+    if rules.get(nbrhood)==None:
+        return 0
+    else:
+        return rules[nbrhood]
+    
 
 
-    return (sum_lst(first_lst),sum_lst(second_lst))
-
-def sum_lst(lst) -> int:
-    summ=0
-    for val in lst:
-        summ += val
-    return summ
-
-def change_due_to_reactions(
-    current_cell: Cell,
-    feed_rate: float,
-    kill_rate: float
-) -> Cell:
+def neighborhood_to_string(board: GameBoard, r: int, c: int, neighborhood_type: str) -> str:
     """
-    Compute the change in a cell due to Gray-Scott reactions.
-
+    Construct the neighborhood string for a given cell in a GameBoard.
     Args:
-        current_cell: The current cell.
-        feed_rate: The feed reaction rate.
-        kill_rate: The kill reaction rate.
+        current_board (GameBoard): The current game board.
+        r (int): The row index of the cell.
+        c (int): The column index of the cell.
+        neighborhood_type (str): The type of neighborhood ("Moore" or "vonNeumann").
     Returns:
-        A Cell representing the change in current_cell due to reactions.
+        str: A string formed of the central square followed by its neighbors
+        according to the neighborhood type indicated.
     """
-    #[A]new =   f(1-[A]) - r · [A] · [B]2
-    #[B]new =  - k · [B] + r · [A] · [B]2 .
+    neighborhood=board[r][c]
 
-    new_A=(feed_rate*(1-current_cell[0]))-(current_cell[0]*(current_cell[1]**2))
-    new_B=(-kill_rate*current_cell[1])+(current_cell[0]*(current_cell[1]**2))
-    return (new_A,new_B)
+    neighborhood_cells=[()]
+    if neighborhood_type=="Moore":
+        neighborhood_cells=[(r-1,c-1),(r-1,c),(r-1,c+1),(r,c+1),(r+1,c+1),(r+1,c),(r+1,c-1),(r,c-1)]
+    elif neighborhood_type=="vonNeumann":
+        neighborhood_cells=[(r-1,c),(r,c+1),(r+1,c),(r,c-1)]
+    else:
+        raise ValueError("We really can't get here")
 
-def change_due_to_diffusion(
-    current_board: Board,
-    row: int,
-    col: int,
-    prey_diffusion_rate: float,
-    predator_diffusion_rate: float,
-    kernel: list[list[float]]
-) -> Cell:
-    """
-    Compute the change in a cell due to diffusion.
+    for (x,y) in neighborhood_cells:
+        if in_field(board,x,y):
+            neighborhood+=str(board[x][y])
+        else:
+            neighborhood+=str(0)
 
-    Args:
-        current_board: A 2D list of Cells, where each Cell is a tuple of two floats.
-        row: Row index of the cell.
-        col: Column index of the cell.
-        prey_diffusion_rate: Diffusion rate for the prey component.
-        predator_diffusion_rate: Diffusion rate for the predator component.
-        kernel: A 3x3 diffusion kernel.
-    Returns:
-        A Cell representing the change in the cell at (row, col) due to diffusion.
-    """
+        
+    return neighborhood
 
-    prey_sum=0
-    pred_sum=0
-    p=row
-    i=col
-    for k in range(-1,2):
-        for l in range(-1,2):
-            if (in_field(current_board,p+k,i+l)):
-                prey_sum+=current_board[p+k][i+l][0]*kernel[1+k][1+l]*prey_diffusion_rate
-                pred_sum+=current_board[p+k][i+l][1]*kernel[1+k][1+l]*predator_diffusion_rate
-    return (prey_sum,pred_sum)
-
-def in_field(board,i,j):
-    #check if not in field-> return false
-    num_rows=count_rows(board)
-    num_cols=count_cols(board)
-    if i<0 or j<0 or i>=num_rows or j>= num_cols:
-        return False
-
-
-    return True
-
-def count_rows(board: GameBoard) -> int:
+def count_rows(board: list[list[bool]]) -> int:
     """
     Count the number of rows in a game board.
 
@@ -151,7 +119,7 @@ def count_rows(board: GameBoard) -> int:
     return len(board)
 
 
-def count_cols(board: GameBoard) -> int:
+def count_columns(board: list[list[bool]]) -> int:
     """
     Count the number of columns in a game board.
 
@@ -166,11 +134,41 @@ def count_cols(board: GameBoard) -> int:
     # give # of elements in 0-th row
     return len(board[0])
 
-def initialize_board(num_rows, num_cols):
-    board: GameBoard=[]
-
-    for _ in range(num_rows):
-         current_row=[0.0]*num_cols
-         board.append(current_row)
-    return board
+def assert_rectangular(board: GameBoard) -> None:
+    """
+    Check whether a GameBoard is rectangular.
+    Args:
+        board (GameBoard): The game board.
+    Raises:
+        ValueError: If the board has no rows or if its rows are not the same length.
+    """
+    if len(board) == 0:
+        raise ValueError("Error: no rows in GameBoard.")
+    first_row_length = len(board[0])
     
+    # range over rows and make sure that they have the same length as first row
+    for row in board:
+        if len(row) != first_row_length:
+            raise ValueError("Error: GameBoard is not rectangular.")
+            
+def in_field(board: GameBoard, i: int, j: int) -> bool:
+    """
+    Check if the indices (i, j) are within the bounds of the board.
+    Args:
+        board (GameBoard): The game board (2D list of ints).
+        i (int): Row index.
+        j (int): Column index.
+    Returns:
+        bool: True if (i, j) is inside the board, False otherwise.
+    """
+    # parameter checks
+    if not isinstance(board, list) or len(board) == 0:
+        raise ValueError("board must be a non-empty GameBoard.")
+    if not isinstance(i, int) or not isinstance(j, int):
+        raise ValueError("i and j must be integers.")
+    if i < 0 or j < 0:
+        return False
+    if i >= count_rows(board) or j >= count_columns(board):
+        return False
+    # if we survive to here, then we are on the board
+    return True
