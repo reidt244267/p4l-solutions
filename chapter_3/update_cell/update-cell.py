@@ -1,63 +1,72 @@
+# import necessary libraries
 import sys
+import re
 
 # Please do not remove package declarations because these are used by the autograder. If you need additional packages, then you may declare them above.
 
-# GameBoard is a two-dimensional list of boolean variables
+# GameBoard is a two-dimensional list of strings, one per cell state,
 # representing a single generation of a Game of Life board.
-GameBoard = list[list[bool]]  
+GameBoard = list[list[str]]  
 
 # write your update_cell() function here along with any subroutines that you need.
-def update_cell(board: GameBoard, r: int, c: int) -> bool:
+def update_cell(board: GameBoard, r: int, c: int,
+                neighborhood_type: str,
+                rules: dict[str, str]) -> str:
     """
-    Determine the next state of the cell at (r, c) in the Game of Life.
+    Determine next-state string for cell (r, c) using rules and neighborhood type.
     Args:
-        board (GameBoard): The current game board.
-        r (int): Row index.
-        c (int): Column index.
+        board (GameBoard): Current state of the automaton.
+        r (int): Row index of the cell to update.
+        c (int): Column index of the cell to update.
+        neighborhood_type (str): Either "Moore" or "vonNeumann".
+        rules (dict[str, str]): A mapping from neighborhood strings to next-state strings.
     Returns:
-        bool: True if the cell is alive in the next generation, False otherwise.
+        int: next state for the cell.
     """
     if not isinstance(board,list) or len(board)==0:
         raise ValueError("board must be a non-empty GameBoard")
     if not isinstance(r,int) or not isinstance(c,int):
         raise ValueError("r and c must be integers")
 
-    num_neighbors=count_live_neighbors(board,r,c)
+    nbrhood=neighborhood_to_string(board,r,c,neighborhood_type)
 
-    #if alive
-    if board[r][c]:
-        if num_neighbors==2 or num_neighbors==3:
-            return True
+    if rules.get(nbrhood)==None:
+        return 0
+    else:
+        return rules[nbrhood]
+    
+
+
+def neighborhood_to_string(board: GameBoard, r: int, c: int, neighborhood_type: str) -> str:
+    """
+    Construct the neighborhood string for a given cell in a GameBoard.
+    Args:
+        current_board (GameBoard): The current game board.
+        r (int): The row index of the cell.
+        c (int): The column index of the cell.
+        neighborhood_type (str): The type of neighborhood ("Moore" or "vonNeumann").
+    Returns:
+        str: A string formed of the central square followed by its neighbors
+        according to the neighborhood type indicated.
+    """
+    neighborhood=board[r][c]
+
+    neighborhood_cells=[()]
+    if neighborhood_type=="Moore":
+        neighborhood_cells=[(r-1,c-1),(r-1,c),(r-1,c+1),(r,c+1),(r+1,c+1),(r+1,c),(r+1,c-1),(r,c-1)]
+    elif neighborhood_type=="vonNeumann":
+        neighborhood_cells=[(r-1,c),(r,c+1),(r+1,c),(r,c-1)]
+    else:
+        raise ValueError("We really can't get here")
+
+    for (x,y) in neighborhood_cells:
+        if in_field(board,x,y):
+            neighborhood+=str(board[x][y])
         else:
-            return False
+            neighborhood+=str(0)
 
-    else: #dead
-        if num_neighbors==3:
-            return True
-        else:
-            return False
-
-
-def count_live_neighbors(board: GameBoard, r, c):
-    num_live_neighbors=0
-
-    for i in range(r-1,r+2):
-        for j in range(c-1,c+2):
-            if ((i!=r) or (j!=c)) and in_field(board,i,j):
-                if board[i][j]:
-                    num_live_neighbors+=1
-
-    return num_live_neighbors
-
-def in_field(board,i,j):
-    #check if not in field-> return false
-    num_rows=count_rows(board)
-    num_cols=count_cols(board)
-    if i<0 or j<0 or i>=num_rows or j>= num_cols:
-        return False
-
-
-    return True
+        
+    return neighborhood
 
 def count_rows(board: list[list[bool]]) -> int:
     """
@@ -71,7 +80,7 @@ def count_rows(board: list[list[bool]]) -> int:
     return len(board)
 
 
-def count_cols(board: list[list[bool]]) -> int:
+def count_columns(board: list[list[bool]]) -> int:
     """
     Count the number of columns in a game board.
 
@@ -97,8 +106,30 @@ def assert_rectangular(board: GameBoard) -> None:
     if len(board) == 0:
         raise ValueError("Error: no rows in GameBoard.")
     first_row_length = len(board[0])
-
+    
     # range over rows and make sure that they have the same length as first row
     for row in board:
         if len(row) != first_row_length:
             raise ValueError("Error: GameBoard is not rectangular.")
+            
+def in_field(board: GameBoard, i: int, j: int) -> bool:
+    """
+    Check if the indices (i, j) are within the bounds of the board.
+    Args:
+        board (GameBoard): The game board (2D list of ints).
+        i (int): Row index.
+        j (int): Column index.
+    Returns:
+        bool: True if (i, j) is inside the board, False otherwise.
+    """
+    # parameter checks
+    if not isinstance(board, list) or len(board) == 0:
+        raise ValueError("board must be a non-empty GameBoard.")
+    if not isinstance(i, int) or not isinstance(j, int):
+        raise ValueError("i and j must be integers.")
+    if i < 0 or j < 0:
+        return False
+    if i >= count_rows(board) or j >= count_columns(board):
+        return False
+    # if we survive to here, then we are on the board
+    return True
