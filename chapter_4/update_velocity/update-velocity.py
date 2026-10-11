@@ -1,35 +1,56 @@
-from dataclasses import dataclass, field
-        
-@dataclass
+import sys
+import math
+from typing import List
+
+# OrderedPair contains two float fields corresponding to
+# the x and y coordinates of a point or vector in two-dimensional space.
 class OrderedPair:
-    x: float = 0.0
-    y: float = 0.0
+    def __init__(self, x: float = 0.0, y: float = 0.0):
+        self.x = x
+        self.y = y
 
-@dataclass
-class Body:
-    name: str = ""
-    position: OrderedPair = field(default_factory=OrderedPair)
-    velocity: OrderedPair = field(default_factory=OrderedPair)
-    acceleration: OrderedPair = field(default_factory=OrderedPair)
-    mass: float = 0.0
-    radius: float = 0.0
-    red: int = 0
-    green: int = 0
-    blue: int = 0
+# Boid represents our "bird" object. It contains two
+# OrderedPair fields corresponding to its position, velocity, and acceleration.
+class Boid:
+    def __init__(self):
+        self.position = OrderedPair()
+        self.velocity = OrderedPair()
+        self.acceleration = OrderedPair()
 
+# Sky represents a single time point of the simulation.
+# It contains a width parameter indicating the boundary of the sky, as well as a list of Boid objects.
+# It also contains the system parameters.
+class Sky:
+    def __init__(self):
+        self.width: float = 0.0
+        self.boids: List[Boid] = []
+        self.max_boid_speed: float = 0.0  # fastest speed that a boid can fly
+        self.proximity: float = 0.0       # used to determine if boids are close enough for forces to apply
+        self.separation_factor: float = 0.0
+        self.alignment_factor: float = 0.0
+        self.cohesion_factor: float = 0.0
 
-# Write your update_velocity() function here along with any subroutines you need.
-def update_velocity(b: Body, old_acceleration: OrderedPair, time: float) -> OrderedPair:
+            
+# write your update_velocity() function here along with any subroutines that you need.
+def update_velocity(b: Boid, old_acceleration: OrderedPair, max_boid_speed: float, time_step: float) -> OrderedPair:
     """
-    Update the velocity of a body using Newtonian kinematics.
+    Update the velocity of a boid.
 
     Args:
-        b: A Body object.
-        time: The amount of time elapsed.
+        b: A Boid object.
+        old_acceleration: An OrderedPair representing the previous acceleration.
+        time_step: The time step over which to update the velocity.
+        max_boid_speed: The maximum allowed speed of the boid.
     Returns:
-        An OrderedPair representing the updated velocity of the body.
+        An OrderedPair representing the updated velocity of the boid after
+        time_step seconds.
+        vx(n+1) = (1/2) · (ax(n) + ax(n+1)) · t + vx(n)
     """
-    vx=b.velocity.x+0.5*(b.acceleration.x+old_acceleration.x)*time
-    vy=b.velocity.y+0.5*(b.acceleration.y+old_acceleration.y)*time
 
-    return OrderedPair(vx,vy)
+    vel_x=((0.5)*(old_acceleration.x+b.acceleration.x)*time_step)+b.velocity.x
+    vel_y=((0.5)*(old_acceleration.y+b.acceleration.y)*time_step)+b.velocity.y
+
+    
+
+
+    return limit_speed(OrderedPair(vel_x,vel_y),max_boid_speed)
