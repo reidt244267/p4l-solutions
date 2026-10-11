@@ -1,83 +1,70 @@
-import math
 import sys
-from dataclasses import dataclass, field
+import math
+from typing import List
 
-G = 2 * 6.67408e-11
 
-@dataclass
+# OrderedPair contains two float fields corresponding to
+# the x and y coordinates of a point or vector in two-dimensional space.
 class OrderedPair:
-    x: float = 0.0
-    y: float = 0.0
+    def __init__(self, x: float = 0.0, y: float = 0.0):
+        self.x = x
+        self.y = y
 
-@dataclass
-class Body:
-    name: str = ""
-    mass: float = 0.0
-    radius: float = 0.0
-    position: OrderedPair = field(default_factory=OrderedPair)
-    velocity: OrderedPair = field(default_factory=OrderedPair)
-    acceleration: OrderedPair = field(default_factory=OrderedPair)
-    red: int = 0
-    green: int = 0
-    blue: int = 0
 
-@dataclass
-class Universe:
-    bodies: list[Body] = field(default_factory=list)
-    width: float = 0.0
+# Boid represents our "bird" object. It contains three
+# OrderedPair fields corresponding to its position, velocity, and acceleration.
+class Boid:
+    def __init__(self):
+        self.position = OrderedPair()
+        self.velocity = OrderedPair()
+        self.acceleration = OrderedPair()
 
-# Insert your update_acceleration() function here, along with any subroutines that you need.
-def update_acceleration(current_universe: Universe, b: Body) -> OrderedPair:
+
+# Sky represents a single time point of the simulation.
+# It contains a width parameter indicating the boundary of the sky, as well as a list of Boid objects.
+# It also contains the system parameters.
+class Sky:
+    def __init__(self):
+        self.width: float = 0.0
+        self.boids: List[Boid] = []
+        self.max_boid_speed: float = 0.0  # fastest speed that a boid can fly
+        self.proximity: float = 0.0       # used to determine if boids are close enough for forces to apply
+        self.separation_factor: float = 0.0
+        self.alignment_factor: float = 0.0
+        self.cohesion_factor: float = 0.0
+
+            
+#implement update_acceleration and note use of subroutines
+def update_acceleration(current_sky: Sky, i: int) -> OrderedPair:
     """
-    Compute the updated acceleration of a body due to the gravity of every
-    other body in the universe.
-
-    Newton's second law: F = ma, so a = F_net / m.
+    Update the acceleration of a boid in the next generation.
 
     Args:
-        current_universe: A Universe object (a collection of Body objects).
-        b: The Body whose acceleration is being updated.
+        current_sky: A Sky object containing boids and behavioral parameters.
+        i: Index of the boid of interest in current_sky.boids.
     Returns:
-        An OrderedPair representing the body's new acceleration.
+        An OrderedPair representing the updated acceleration of the boid
+        at index i for the next generation.
     """
-    net_force=compute_net_force(current_universe,b)
+    if count_thershold(current_sky,i)==False:
+        return OrderedPair(0.0,0.0)
+    sep_accel=net_acceleration_due_to_separation(current_sky,i)
+    align_accel=net_acceleration_due_to_alignment(current_sky,i)
+    coh_accel=net_acceleration_due_to_cohesion(current_sky,i)
 
-    ax=net_force.x/b.mass
-    ay=net_force.y/b.mass
-
-    return OrderedPair(ax,ay)
-
-def copy_universe(current_universe: Universe) -> Universe:
-    """
-    Create a copy of a universe.
-
-    Args:
-        current_universe: A Universe object to copy.
-    Returns:
-        A new Universe object with copied width and bodies.
-    """
-    new_universe = Universe()
-    new_universe.width = current_universe.width
-    new_universe.bodies = [copy_body(body) for body in current_universe.bodies]
-    return new_universe
+    net_x_accel=sep_accel.x+align_accel.x+coh_accel.x
+    net_y_accel=sep_accel.y+align_accel.y+coh_accel.y
+    return OrderedPair(net_x_accel,net_y_accel)
 
 
-def copy_body(old_body: Body) -> Body:
-    """
-    Create a copy of a body.
 
-    Args:
-        old_body: A Body object to copy.
-    Returns:
-        A new Body object with all fields copied from old_body.
-    """
-    new_body = Body()
-    new_body.mass = old_body.mass
-    new_body.name = old_body.name
-    new_body.position.x = old_body.position.x
-    new_body.position.y = old_body.position.y
-    new_body.velocity.x = old_body.velocity.x
-    new_body.velocity.y = old_body.velocity.y
-    new_body.acceleration.x = old_body.acceleration.x
-    new_body.acceleration.y = old_body.acceleration.y
-    return new_body
+
+def count_thershold(current_sky: Sky, i: int):
+    count=0
+    for boid in current_sky.boids:
+        if distance(boid.position,current_sky.boids[i].position)<current_sky.proximity:
+            count+=1
+    if count>0:
+        return True
+    else:
+        return False
